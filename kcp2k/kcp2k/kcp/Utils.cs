@@ -1,3 +1,4 @@
+using System;
 using System.Runtime.CompilerServices;
 
 namespace kcp2k
@@ -13,21 +14,21 @@ namespace kcp2k
         }
 
         // encode 8 bits unsigned int
-        public static int Encode8u(byte[] p, int offset, byte value)
+        public static int Encode8u(Span<byte> p, int offset, byte value)
         {
             p[0 + offset] = value;
             return 1;
         }
 
         // decode 8 bits unsigned int
-        public static int Decode8u(byte[] p, int offset, out byte value)
+        public static int Decode8u(ReadOnlySpan<byte> p, int offset, out byte value)
         {
             value = p[0 + offset];
             return 1;
         }
 
         // encode 16 bits unsigned int (lsb)
-        public static int Encode16U(byte[] p, int offset, ushort value)
+        public static int Encode16U(Span<byte> p, int offset, ushort value)
         {
             p[0 + offset] = (byte)(value >> 0);
             p[1 + offset] = (byte)(value >> 8);
@@ -35,7 +36,7 @@ namespace kcp2k
         }
 
         // decode 16 bits unsigned int (lsb)
-        public static int Decode16U(byte[] p, int offset, out ushort value)
+        public static int Decode16U(ReadOnlySpan<byte> p, int offset, out ushort value)
         {
             ushort result = 0;
             result |= p[0 + offset];
@@ -45,7 +46,7 @@ namespace kcp2k
         }
 
         // encode 32 bits unsigned int (lsb)
-        public static int Encode32U(byte[] p, int offset, uint value)
+        public static int Encode32U(Span<byte> p, int offset, uint value)
         {
             p[0 + offset] = (byte)(value >> 0);
             p[1 + offset] = (byte)(value >> 8);
@@ -55,7 +56,7 @@ namespace kcp2k
         }
 
         // decode 32 bits unsigned int (lsb)
-        public static int Decode32U(byte[] p, int offset, out uint value)
+        public static int Decode32U(ReadOnlySpan<byte> p, int offset, out uint value)
         {
             uint result = 0;
             result |= p[0 + offset];

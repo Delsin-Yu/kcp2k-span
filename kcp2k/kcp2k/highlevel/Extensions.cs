@@ -15,7 +15,7 @@ namespace kcp2k
         // => wrapped with Poll to avoid WouldBlock allocating new SocketException.
         // => wrapped with try-catch to ignore WouldBlock exception.
         // make sure to set socket.Blocking = false before using this!
-        public static bool SendToNonBlocking(this Socket socket, ArraySegment<byte> data, EndPoint remoteEP)
+        public static bool SendToNonBlocking(this Socket socket, ReadOnlyMemory<byte> data, EndPoint remoteEP)
         {
             try
             {
@@ -31,7 +31,7 @@ namespace kcp2k
                 // send to the the endpoint.
                 // do not send to 'newClientEP', as that's always reused.
                 // fixes https://github.com/MirrorNetworking/Mirror/issues/3296
-                socket.SendTo(data.Array, data.Offset, data.Count, SocketFlags.None, remoteEP);
+                socket.SendTo(data.Span, SocketFlags.None, remoteEP);
                 return true;
             }
             catch (SocketException e)
@@ -50,7 +50,7 @@ namespace kcp2k
         // => wrapped with Poll to avoid WouldBlock allocating new SocketException.
         // => wrapped with try-catch to ignore WouldBlock exception.
         // make sure to set socket.Blocking = false before using this!
-        public static bool SendNonBlocking(this Socket socket, ArraySegment<byte> data)
+        public static bool SendNonBlocking(this Socket socket, ReadOnlyMemory<byte> data)
         {
             try
             {
@@ -64,7 +64,7 @@ namespace kcp2k
                 if (!socket.Poll(0, SelectMode.SelectWrite)) return false;
 
                 // SendTo allocates. we used bound Send.
-                socket.Send(data.Array, data.Offset, data.Count, SocketFlags.None);
+                socket.Send(data.Span, SocketFlags.None);
                 return true;
             }
             catch (SocketException e)
@@ -83,7 +83,7 @@ namespace kcp2k
         // => wrapped with Poll to avoid WouldBlock allocating new SocketException.
         // => wrapped with try-catch to ignore WouldBlock exception.
         // make sure to set socket.Blocking = false before using this!
-        public static bool ReceiveFromNonBlocking(this Socket socket, byte[] recvBuffer, out ArraySegment<byte> data, ref EndPoint remoteEP)
+        public static bool ReceiveFromNonBlocking(this Socket socket, Memory<byte> recvBuffer, out ReadOnlyMemory<byte> data, ref EndPoint remoteEP)
         {
             data = default;
 
@@ -106,8 +106,8 @@ namespace kcp2k
                 //
                 // throws SocketException if datagram was larger than buffer.
                 // https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.socket.receive?view=net-6.0
-                int size = socket.ReceiveFrom(recvBuffer, 0, recvBuffer.Length, SocketFlags.None, ref remoteEP);
-                data = new ArraySegment<byte>(recvBuffer, 0, size);
+                int size = socket.ReceiveFrom(recvBuffer.Span, SocketFlags.None, ref remoteEP);
+                data = recvBuffer[..size];
                 return true;
             }
             catch (SocketException e)
@@ -126,7 +126,7 @@ namespace kcp2k
         // => wrapped with Poll to avoid WouldBlock allocating new SocketException.
         // => wrapped with try-catch to ignore WouldBlock exception.
         // make sure to set socket.Blocking = false before using this!
-        public static bool ReceiveNonBlocking(this Socket socket, byte[] recvBuffer, out ArraySegment<byte> data)
+        public static bool ReceiveNonBlocking(this Socket socket, Memory<byte> recvBuffer, out ReadOnlyMemory<byte> data)
         {
             data = default;
 
@@ -148,8 +148,8 @@ namespace kcp2k
                 //
                 // throws SocketException if datagram was larger than buffer.
                 // https://learn.microsoft.com/en-us/dotnet/api/system.net.sockets.socket.receive?view=net-6.0
-                int size = socket.Receive(recvBuffer, 0, recvBuffer.Length, SocketFlags.None);
-                data = new ArraySegment<byte>(recvBuffer, 0, size);
+                int size = socket.Receive(recvBuffer.Span, SocketFlags.None);
+                data = recvBuffer[..size];
                 return true;
             }
             catch (SocketException e)

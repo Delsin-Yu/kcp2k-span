@@ -7,10 +7,10 @@ namespace kcp2k.Tests
     {
         public MockPeer(KcpConfig config) : base(config, 0) {}
         protected override void OnAuthenticated() => throw new NotImplementedException();
-        protected override void OnData(ArraySegment<byte> message, KcpChannel channel) => throw new NotImplementedException();
+        protected override void OnData(ReadOnlyMemory<byte> message, KcpChannel channel) => throw new NotImplementedException();
         protected override void OnDisconnected() => throw new NotImplementedException();
         protected override void OnError(ErrorCode error, string message) => throw new NotImplementedException();
-        protected override void RawSend(ArraySegment<byte> data) => throw new NotImplementedException();
+        protected override void RawSend(ReadOnlyMemory<byte> data) => throw new NotImplementedException();
     }
 
     public class KcpPeerTests

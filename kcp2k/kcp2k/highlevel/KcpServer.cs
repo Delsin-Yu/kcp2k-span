@@ -19,7 +19,7 @@ namespace kcp2k
         // this ensures they are always initialized when used.
         // fixes https://github.com/MirrorNetworking/Mirror/issues/3337 and more
         protected readonly Action<int> OnConnected;
-        protected readonly Action<int, ArraySegment<byte>, KcpChannel> OnData;
+        protected readonly Action<int, ReadOnlyMemory<byte>, KcpChannel> OnData;
         protected readonly Action<int> OnDisconnected;
         protected readonly Action<int, ErrorCode, string> OnError;
 
@@ -44,7 +44,7 @@ namespace kcp2k
             new Dictionary<int, KcpServerConnection>();
 
         public KcpServer(Action<int> OnConnected,
-                         Action<int, ArraySegment<byte>, KcpChannel> OnData,
+                         Action<int, ReadOnlyMemory<byte>, KcpChannel> OnData,
                          Action<int> OnDisconnected,
                          Action<int, ErrorCode, string> OnError,
                          KcpConfig config)
@@ -167,7 +167,7 @@ namespace kcp2k
             Common.ConfigureSocketBuffers(socket, config.RecvBufferSize, config.SendBufferSize);
         }
 
-        public void Send(int connectionId, ArraySegment<byte> segment, KcpChannel channel)
+        public void Send(int connectionId, ReadOnlySpan<byte> segment, KcpChannel channel)
         {
             if (connections.TryGetValue(connectionId, out KcpServerConnection connection))
             {
@@ -198,7 +198,7 @@ namespace kcp2k
         // https://github.com/vis2k/where-allocation
         // bool return because not all receives may be valid.
         // for example, relay may expect a certain header.
-        protected virtual bool RawReceiveFrom(out ArraySegment<byte> segment, out int connectionId)
+        protected virtual bool RawReceiveFrom(out ReadOnlyMemory<byte> segment, out int connectionId)
         {
             segment = default;
             connectionId = 0;
@@ -228,7 +228,7 @@ namespace kcp2k
         // io - out.
         // virtual so it may be modified for relays, nonalloc workaround, etc.
         // relays may need to prefix connId (and remoteEndPoint would be same for all)
-        protected virtual void RawSend(int connectionId, ArraySegment<byte> data)
+        protected virtual void RawSend(int connectionId, ReadOnlyMemory<byte> data)
         {
             // get the connection's endpoint
             if (!connections.TryGetValue(connectionId, out KcpServerConnection connection))
@@ -259,7 +259,7 @@ namespace kcp2k
             // events need to be wrapped with connectionIds
             KcpServerConnection connection = new KcpServerConnection(
                 OnConnectedCallback,
-                (message,  channel) => OnData(connectionId, message, channel),
+                (message, channel) => OnData(connectionId, message, channel),
                 OnDisconnectedCallback,
                 (error, reason) => OnError(connectionId, error, reason),
                 (data) => RawSend(connectionId, data),
@@ -303,7 +303,7 @@ namespace kcp2k
 
         // receive + add + process once.
         // best to call this as long as there is more data to receive.
-        void ProcessMessage(ArraySegment<byte> segment, int connectionId)
+        void ProcessMessage(ReadOnlyMemory<byte> segment, int connectionId)
         {
             //Log.Info($"[KCP] server raw recv {msgLength} bytes = {BitConverter.ToString(buffer, 0, msgLength)}");
 
@@ -357,7 +357,7 @@ namespace kcp2k
         public virtual void TickIncoming()
         {
             // input all received messages into kcp
-            while (RawReceiveFrom(out ArraySegment<byte> segment, out int connectionId))
+            while (RawReceiveFrom(out ReadOnlyMemory<byte> segment, out int connectionId))
             {
                 ProcessMessage(segment, connectionId);
             }

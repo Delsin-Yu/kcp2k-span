@@ -203,14 +203,14 @@ namespace kcp2k
         // this ensures they are always initialized when used.
         // fixes https://github.com/MirrorNetworking/Mirror/issues/3337 and more
         protected abstract void OnAuthenticated();
-        protected abstract void OnData(ArraySegment<byte> message, KcpChannel channel);
+        protected abstract void OnData(ReadOnlyMemory<byte> message, KcpChannel channel);
         protected abstract void OnDisconnected();
 
         // error callback instead of logging.
         // allows libraries to show popups etc.
         // (string instead of Exception for ease of use and to avoid user panic)
         protected abstract void OnError(ErrorCode error, string message);
-        protected abstract void RawSend(ArraySegment<byte> data);
+        protected abstract void RawSend(ReadOnlyMemory<byte> data);
 
         ////////////////////////////////////////////////////////////////////////
 
@@ -281,7 +281,7 @@ namespace kcp2k
 
         // reads the next reliable message type & content from kcp.
         // -> to avoid buffering, unreliable messages call OnData directly.
-        bool ReceiveNextReliable(out KcpHeaderReliable header, out ArraySegment<byte> message)
+        bool ReceiveNextReliable(out KcpHeaderReliable header, out ReadOnlyMemory<byte> message)
         {
             message = default;
             header = KcpHeaderReliable.Ping;
@@ -323,7 +323,7 @@ namespace kcp2k
             }
 
             // extract content without header
-            message = new ArraySegment<byte>(kcpMessageBuffer, 1, msgSize - 1);
+            message = new ReadOnlyMemory<byte>(kcpMessageBuffer, 1, msgSize - 1);
             lastReceiveTime = (uint)watch.ElapsedMilliseconds;
             return true;
         }
@@ -337,7 +337,7 @@ namespace kcp2k
             HandleChoked();
 
             // any reliable kcp message received?
-            if (ReceiveNextReliable(out KcpHeaderReliable header, out ArraySegment<byte> message))
+            if (ReceiveNextReliable(out KcpHeaderReliable header, out ReadOnlyMemory<byte> message))
             {
                 // message type FSM. no default so we never miss a case.
                 switch (header)
@@ -380,7 +380,7 @@ namespace kcp2k
             HandleChoked();
 
             // process all received messages
-            while (ReceiveNextReliable(out KcpHeaderReliable header, out ArraySegment<byte> message))
+            while (ReceiveNextReliable(out KcpHeaderReliable header, out ReadOnlyMemory<byte> message))
             {
                 // message type FSM. no default so we never miss a case.
                 switch (header)
@@ -396,9 +396,9 @@ namespace kcp2k
                     case KcpHeaderReliable.Data:
                     {
                         // call OnData IF the message contained actual data
-                        if (message.Count > 0)
+                        if (message.Length > 0)
                         {
-                            //Log.Warning($"Kcp recv msg: {BitConverter.ToString(message.Array, message.Offset, message.Count)}");
+                            //Log.Warning($"Kcp recv msg: {BitConverter.ToString(message.Array, message.Offset, message.Length)}");
                             OnData(message, KcpChannel.Reliable);
                         }
                         // empty data = attacker, or something went wrong
@@ -521,24 +521,24 @@ namespace kcp2k
             }
         }
 
-        protected void OnRawInputReliable(ArraySegment<byte> message)
+        protected void OnRawInputReliable(ReadOnlyMemory<byte> message)
         {
             // input into kcp, but skip channel byte
-            int input = kcp.Input(message.Array, message.Offset, message.Count);
+            int input = kcp.Input(message.Span);
             if (input != 0)
             {
                 // GetType() shows Server/ClientConn instead of just Connection.
-                Log.Warning($"[KCP] {GetType()}: Input failed with error={input} for buffer with length={message.Count - 1}");
+                Log.Warning($"[KCP] {GetType()}: Input failed with error={input} for buffer with length={message.Length - 1}");
             }
         }
 
-        protected void OnRawInputUnreliable(ArraySegment<byte> message)
+        protected void OnRawInputUnreliable(ReadOnlyMemory<byte> message)
         {
             // need at least one byte for the KcpHeader enum
-            if (message.Count < 1) return;
+            if (message.Length < 1) return;
 
             // safely extract header. attackers may send values out of enum range.
-            byte headerByte = message.Array[message.Offset + 0];
+            byte headerByte = message.Span[0];
             if (!KcpHeader.ParseUnreliable(headerByte, out KcpHeaderUnreliable header))
             {
                 OnError(ErrorCode.InvalidReceive, $"{GetType()}: Receive failed to parse header: {headerByte} is not defined in {typeof(KcpHeaderUnreliable)}.");
@@ -548,7 +548,8 @@ namespace kcp2k
 
             // subtract header from message content
             // (above we already ensure it's at least 1 byte long)
-            message = new ArraySegment<byte>(message.Array, message.Offset + 1, message.Count - 1);
+            
+            message = message[1..];
 
             switch (header)
             {
@@ -629,67 +630,77 @@ namespace kcp2k
             Buffer.BlockCopy(data, 0, rawSendBuffer, 1+4, length);
 
             // IO send
-            ArraySegment<byte> segment = new ArraySegment<byte>(rawSendBuffer, 0, length + 1+4);
+            ReadOnlyMemory<byte> segment = new ReadOnlyMemory<byte>(rawSendBuffer, 0, length + 1+4);
             RawSend(segment);
         }
 
-        void SendReliable(KcpHeaderReliable header, ArraySegment<byte> content)
+        void SendReliable(KcpHeaderReliable header, ReadOnlySpan<byte> content)
         {
+            var sendBufferSpan = kcpSendBuffer.AsSpan();
+
             // 1 byte header + content needs to fit into send buffer
-            if (1 + content.Count > kcpSendBuffer.Length) // TODO
+            if (1 + content.Length > sendBufferSpan.Length) // TODO
             {
                 // otherwise content is larger than MaxMessageSize. let user know!
                 // GetType() shows Server/ClientConn instead of just Connection.
-                OnError(ErrorCode.InvalidSend, $"{GetType()}: Failed to send reliable message of size {content.Count} because it's larger than ReliableMaxMessageSize={reliableMax}");
+                OnError(ErrorCode.InvalidSend, $"{GetType()}: Failed to send reliable message of size {content.Length} because it's larger than ReliableMaxMessageSize={reliableMax}");
                 return;
             }
 
             // write channel header
-            kcpSendBuffer[0] = (byte)header;
+            sendBufferSpan[0] = (byte)header;
 
             // write data (if any)
-            if (content.Count > 0)
-                Buffer.BlockCopy(content.Array, content.Offset, kcpSendBuffer, 1, content.Count);
+            if (content.Length > 0)
+            {
+                content.CopyTo(sendBufferSpan[1..]);
+            }
 
             // send to kcp for processing
-            int sent = kcp.Send(kcpSendBuffer, 0, 1 + content.Count);
+            int sent = kcp.Send(sendBufferSpan[..(1 + content.Length)]);
             if (sent < 0)
             {
                 // GetType() shows Server/ClientConn instead of just Connection.
-                OnError(ErrorCode.InvalidSend, $"{GetType()}: Send failed with error={sent} for content with length={content.Count}");
+                OnError(ErrorCode.InvalidSend, $"{GetType()}: Send failed with error={sent} for content with length={content.Length}");
             }
         }
 
-        void SendUnreliable(KcpHeaderUnreliable header, ArraySegment<byte> content)
+        void SendUnreliable(KcpHeaderUnreliable header, ReadOnlySpan<byte> content)
         {
+           
             // message size needs to be <= unreliable max size
-            if (content.Count > unreliableMax)
+            if (content.Length > unreliableMax)
             {
                 // otherwise content is larger than MaxMessageSize. let user know!
                 // GetType() shows Server/ClientConn instead of just Connection.
-                Log.Error($"[KCP] {GetType()}: Failed to send unreliable message of size {content.Count} because it's larger than UnreliableMaxMessageSize={unreliableMax}");
+                Log.Error($"[KCP] {GetType()}: Failed to send unreliable message of size {content.Length} because it's larger than UnreliableMaxMessageSize={unreliableMax}");
                 return;
             }
 
+            var rawSendBufferSpan = rawSendBuffer.AsSpan();
+            
             // write channel header
             // from 0, with 1 byte
-            rawSendBuffer[0] = (byte)KcpChannel.Unreliable;
+            rawSendBufferSpan[0] = (byte)KcpChannel.Unreliable;
 
             // write handshake cookie to protect against UDP spoofing.
             // from 1, with 4 bytes
-            Utils.Encode32U(rawSendBuffer, 1, cookie); // allocation free
+            Utils.Encode32U(rawSendBufferSpan, 1, cookie); // allocation free
 
             // write kcp header
-            rawSendBuffer[5] = (byte)header;
+            rawSendBufferSpan[5] = (byte)header;
 
+            
+            
             // write data (if any)
             // from 6, with N bytes
-            if (content.Count > 0)
-                Buffer.BlockCopy(content.Array, content.Offset, rawSendBuffer, 1 + 4 + 1, content.Count);
+            if (content.Length > 0)
+            {
+                content.CopyTo(rawSendBufferSpan[(1 + 4 + 1)..]);
+            }
 
             // IO send
-            ArraySegment<byte> segment = new ArraySegment<byte>(rawSendBuffer, 0, content.Count + 1 + 4 + 1);
-            RawSend(segment);
+            RawSend(rawSendBuffer.AsMemory(0, content.Length + 1 + 4 + 1));
         }
 
         // server & client need to send handshake at different times, so we need
@@ -708,13 +719,13 @@ namespace kcp2k
             SendReliable(KcpHeaderReliable.Hello, default);
         }
 
-        public void SendData(ArraySegment<byte> data, KcpChannel channel)
+        public void SendData(ReadOnlySpan<byte> data, KcpChannel channel)
         {
             // sending empty segments is not allowed.
             // nobody should ever try to send empty data.
             // it means that something went wrong, e.g. in Mirror/DOTSNET.
             // let's make it obvious so it's easy to debug.
-            if (data.Count == 0)
+            if (data.Length == 0)
             {
                 // pass error to user callback. no need to log it manually.
                 // GetType() shows Server/ClientConn instead of just Connection.

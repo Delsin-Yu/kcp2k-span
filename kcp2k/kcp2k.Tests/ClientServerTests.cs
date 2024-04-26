@@ -58,18 +58,14 @@ namespace kcp2k.Tests
 
 
         // setup ///////////////////////////////////////////////////////////////
-        protected void ClientOnData(ArraySegment<byte> message, KcpChannel channel)
+        protected void ClientOnData(ReadOnlyMemory<byte> message, KcpChannel channel)
         {
-            byte[] copy = new byte[message.Count];
-            Buffer.BlockCopy(message.Array, message.Offset, copy, 0, message.Count);
-            clientReceived.Add(new Message(copy, channel));
+            clientReceived.Add(new Message(message.ToArray(), channel));
         }
 
-        protected void ServerOnData(int connectionId, ArraySegment<byte> message, KcpChannel channel)
+        protected void ServerOnData(int connectionId, ReadOnlyMemory<byte> message, KcpChannel channel)
         {
-            byte[] copy = new byte[message.Count];
-            Buffer.BlockCopy(message.Array, message.Offset, copy, 0, message.Count);
-            serverReceived.Add(new Message(copy, channel));
+            serverReceived.Add(new Message(message.ToArray(), channel));
         }
 
         protected void SetupLogging()
@@ -177,13 +173,13 @@ namespace kcp2k.Tests
             UpdateSeveralTimes(10); // '5' causes flaky tests
         }
 
-        void SendClientToServerBlocking(ArraySegment<byte> message, KcpChannel channel)
+        void SendClientToServerBlocking(ReadOnlySpan<byte> message, KcpChannel channel)
         {
             client.Send(message, channel);
             UpdateSeveralTimes(10); // '5' causes flaky tests
         }
 
-        void SendServerToClientBlocking(int connectionId, ArraySegment<byte> message, KcpChannel channel)
+        void SendServerToClientBlocking(int connectionId, ReadOnlySpan<byte> message, KcpChannel channel)
         {
             server.Send(connectionId, message, channel);
             UpdateSeveralTimes(10); // '5' causes flaky tests
@@ -283,7 +279,7 @@ namespace kcp2k.Tests
             ConnectClientBlocking();
 
             byte[] message = {0x01, 0x02};
-            SendClientToServerBlocking(new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), channel);
             Assert.That(serverReceived.Count, Is.EqualTo(1));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(serverReceived[0].channel, Is.EqualTo(channel));
@@ -305,7 +301,7 @@ namespace kcp2k.Tests
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Warning, new Regex($".*tried sending empty message. This should never happen. Disconnecting."));
 #endif
             byte[] message = new byte[0];
-            SendClientToServerBlocking(new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), channel);
             Assert.That(serverReceived.Count, Is.EqualTo(0));
         }
 
@@ -320,7 +316,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
             Log.Info($"[KCP] Sending {message.Length} bytes = {message.Length / 1024} KB message");
-            SendClientToServerBlocking(new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             UpdateSeveralTimes(5);
             Assert.That(serverReceived.Count, Is.EqualTo(1));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
@@ -338,7 +334,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
             Log.Info($"[KCP] Sending {message.Length} bytes = {message.Length / 1024} KB message");
-            SendClientToServerBlocking(new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(serverReceived.Count, Is.EqualTo(1));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(serverReceived[0].channel, Is.EqualTo(KcpChannel.Unreliable));
@@ -361,7 +357,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
             Log.Info($"[KCP] Sending {message.Length} bytes = {message.Length / 1024} KB message");
-            SendClientToServerBlocking(new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), channel);
             Assert.That(serverReceived.Count, Is.EqualTo(1));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(serverReceived[0].channel, Is.EqualTo(channel));
@@ -379,7 +375,7 @@ namespace kcp2k.Tests
 #if UNITY_2018_3_OR_NEWER
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Warning, new Regex($".*Failed to send reliable message of size {message.Length} because it's larger than ReliableMaxMessageSize={KcpPeer.ReliableMaxMessageSize(config.Mtu, config.ReceiveWindowSize)}"));
 #endif
-            SendClientToServerBlocking(new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(serverReceived.Count, Is.EqualTo(0));
         }
 
@@ -393,7 +389,7 @@ namespace kcp2k.Tests
 #if UNITY_2018_3_OR_NEWER
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, new Regex($".*Failed to send unreliable message of size {message.Length} because it's larger than UnreliableMaxMessageSize={KcpPeer.UnreliableMaxMessageSize(config.Mtu)}"));
 #endif
-            SendClientToServerBlocking(new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(serverReceived.Count, Is.EqualTo(0));
         }
 
@@ -407,10 +403,10 @@ namespace kcp2k.Tests
             ConnectClientBlocking();
 
             byte[] message = {0x01, 0x02};
-            SendClientToServerBlocking(new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), channel);
 
             byte[] message2 = {0x03, 0x04};
-            SendClientToServerBlocking(new ArraySegment<byte>(message2), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message2), channel);
 
             Assert.That(serverReceived.Count, Is.EqualTo(2));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
@@ -428,10 +424,10 @@ namespace kcp2k.Tests
             ConnectClientBlocking();
 
             byte[] message = {0x01, 0x02};
-            SendClientToServerBlocking(new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
 
             byte[] message2 = {0x03, 0x04};
-            SendClientToServerBlocking(new ArraySegment<byte>(message2), KcpChannel.Reliable);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(message2), KcpChannel.Reliable);
 
             Assert.That(serverReceived.Count, Is.EqualTo(2));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
@@ -463,7 +459,7 @@ namespace kcp2k.Tests
 
             // send each one without updating server or client yet
             foreach (byte[] message in messages)
-                client.Send(new ArraySegment<byte>(message), KcpChannel.Reliable);
+                client.Send(new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
 
             // each max sized message needs a lot of updates for all the fragments.
             // for multiple we need to update a lot more than usual.
@@ -500,7 +496,7 @@ namespace kcp2k.Tests
 
             // send each one without updating server or client yet
             foreach (byte[] message in messages)
-                client.Send(new ArraySegment<byte>(message), KcpChannel.Unreliable);
+                client.Send(new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
 
             // each max sized message needs a lot of updates for all the fragments.
             // for multiple we need to update a lot more than usual.
@@ -525,7 +521,7 @@ namespace kcp2k.Tests
             client.cookie += 1;
 
             // try to send a message with wrong cookie
-            client.Send(new ArraySegment<byte>(new byte[]{0x01, 0x02}), KcpChannel.Reliable);
+            client.Send(new ReadOnlySpan<byte>(new byte[]{0x01, 0x02}), KcpChannel.Reliable);
 
             // each max sized message needs a lot of updates for all the fragments.
             // for multiple we need to update a lot more than usual.
@@ -545,7 +541,7 @@ namespace kcp2k.Tests
             client.cookie += 1;
 
             // try to send a message with wrong cookie
-            client.Send(new ArraySegment<byte>(new byte[]{0x01, 0x02}), KcpChannel.Unreliable);
+            client.Send(new ReadOnlySpan<byte>(new byte[]{0x01, 0x02}), KcpChannel.Unreliable);
 
             // each max sized message needs a lot of updates for all the fragments.
             // for multiple we need to update a lot more than usual.
@@ -563,7 +559,7 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0x03, 0x04};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(KcpChannel.Reliable));
@@ -578,10 +574,10 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0xFF, 0x03, 0x04};
-            ArraySegment<byte> segment = new ArraySegment<byte>(message, 1, 2);
+            var segment = message.AsSpan(1, 2);
             SendServerToClientBlocking(connectionId, segment, KcpChannel.Reliable);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
-            Assert.That(clientReceived[0].data.SequenceEqual(segment), Is.True);
+            Assert.That(clientReceived[0].data.SequenceEqual(segment.ToArray()), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(KcpChannel.Reliable));
         }
 
@@ -593,7 +589,7 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0x03, 0x04};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(KcpChannel.Unreliable));
@@ -607,11 +603,11 @@ namespace kcp2k.Tests
             ConnectClientBlocking();
             int connectionId = ServerFirstConnectionId();
 
-            byte[] message = {0xFF, 0x03, 0x04};
-            ArraySegment<byte> segment = new ArraySegment<byte>(message, 1, 2);
+            byte[] message = { 0xFF, 0x03, 0x04};
+            var segment = message.AsSpan(1, 2);
             SendServerToClientBlocking(connectionId, segment, KcpChannel.Unreliable);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
-            Assert.That(clientReceived[0].data.SequenceEqual(segment), Is.True);
+            Assert.That(clientReceived[0].data.SequenceEqual(segment.ToArray()), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(KcpChannel.Unreliable));
         }
 
@@ -631,7 +627,7 @@ namespace kcp2k.Tests
 #endif
 
             byte[] message = new byte[0];
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(clientReceived.Count, Is.EqualTo(0));
         }
 
@@ -647,7 +643,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
 
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             UpdateSeveralTimes(5);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
@@ -666,7 +662,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
 
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(KcpChannel.Unreliable));
@@ -690,7 +686,7 @@ namespace kcp2k.Tests
             for (int i = 0; i < message.Length; ++i)
                 message[i] = (byte)(i & 0xFF);
 
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), channel);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), channel);
             Assert.That(clientReceived.Count, Is.EqualTo(1));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceived[0].channel, Is.EqualTo(channel));
@@ -708,7 +704,7 @@ namespace kcp2k.Tests
 #if UNITY_2018_3_OR_NEWER
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Warning, new Regex($".*Failed to send reliable message of size {message.Length} because it's larger than ReliableMaxMessageSize={KcpPeer.ReliableMaxMessageSize(config.Mtu, config.ReceiveWindowSize)}"));
 #endif
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(clientReceived.Count, Is.EqualTo(0));
         }
 
@@ -725,7 +721,7 @@ namespace kcp2k.Tests
 #if UNITY_2018_3_OR_NEWER
             UnityEngine.TestTools.LogAssert.Expect(UnityEngine.LogType.Error, new Regex($".*Failed to send unreliable message of size {message.Length} because it's larger than UnreliableMaxMessageSize={KcpPeer.UnreliableMaxMessageSize(config.Mtu)}"));
 #endif
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(clientReceived.Count, Is.EqualTo(0));
         }
 
@@ -738,10 +734,10 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0x03, 0x04};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
 
             byte[] message2 = {0x05, 0x06};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message2), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message2), KcpChannel.Reliable);
 
             Assert.That(clientReceived.Count, Is.EqualTo(2));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
@@ -764,10 +760,10 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0x03, 0x04};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), channel);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), channel);
 
             byte[] message2 = {0x05, 0x06};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message2), channel);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message2), channel);
 
             Assert.That(clientReceived.Count, Is.EqualTo(2));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
@@ -788,10 +784,10 @@ namespace kcp2k.Tests
             int connectionId = ServerFirstConnectionId();
 
             byte[] message = {0x03, 0x04};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
 
             byte[] message2 = {0x05, 0x06};
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(message2), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(message2), KcpChannel.Reliable);
 
             Assert.That(clientReceived.Count, Is.EqualTo(2));
             Assert.That(clientReceived[0].data.SequenceEqual(message), Is.True);
@@ -849,7 +845,7 @@ namespace kcp2k.Tests
             byte[] message = new byte[KcpPeer.ReliableMaxMessageSize(config.Mtu, config.ReceiveWindowSize)];
             for (int i = 0; i < 100; ++i)
             {
-                server.connections[connectionId].SendData(new ArraySegment<byte>(message), KcpChannel.Reliable);
+                server.connections[connectionId].SendData(new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             }
             Assert.That(client.connected, Is.True);
 
@@ -913,11 +909,11 @@ namespace kcp2k.Tests
             Thread.Sleep(firstSleep);
 
             // send one reliable message to both ends
-            SendClientToServerBlocking(new ArraySegment<byte>(new byte[1]), channel);
-            SendServerToClientBlocking(connectionId, new ArraySegment<byte>(new byte[1]), channel);
+            SendClientToServerBlocking(new ReadOnlySpan<byte>(new byte[1]), channel);
+            SendServerToClientBlocking(connectionId, new ReadOnlySpan<byte>(new byte[1]), channel);
 
             // send one reliable message: should reset timeout
-            client.Send(new ArraySegment<byte>(new byte[1]), channel);
+            client.Send(new ReadOnlySpan<byte>(new byte[1]), channel);
             UpdateSeveralTimes(4);
 
             // sleep for half a timeout again.
@@ -986,7 +982,7 @@ namespace kcp2k.Tests
             byte[] message = {0x03, 0x04};
             for (int i = 0; i < KcpPeer.QueueDisconnectThreshold + 1; ++i)
             {
-                server.Send(connectionId, new ArraySegment<byte>(message), KcpChannel.Reliable);
+                server.Send(connectionId, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             }
 
             // no need to log thousands of messages. that would take forever.

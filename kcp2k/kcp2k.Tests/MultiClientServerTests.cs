@@ -49,25 +49,19 @@ namespace kcp2k.Tests
         protected List<Message> clientReceivedB;
 
         // setup ///////////////////////////////////////////////////////////////
-        protected void ClientOnDataA(ArraySegment<byte> message, KcpChannel channel)
+        protected void ClientOnDataA(ReadOnlyMemory<byte> message, KcpChannel channel)
         {
-            byte[] copy = new byte[message.Count];
-            Buffer.BlockCopy(message.Array, message.Offset, copy, 0, message.Count);
-            clientReceivedA.Add(new Message(copy, channel));
+            clientReceivedA.Add(new Message(message.ToArray(), channel));
         }
 
-        protected void ClientOnDataB(ArraySegment<byte> message, KcpChannel channel)
+        protected void ClientOnDataB(ReadOnlyMemory<byte> message, KcpChannel channel)
         {
-            byte[] copy = new byte[message.Count];
-            Buffer.BlockCopy(message.Array, message.Offset, copy, 0, message.Count);
-            clientReceivedB.Add(new Message(copy, channel));
+            clientReceivedB.Add(new Message(message.ToArray(), channel));
         }
 
-        protected void ServerOnData(int connectionId, ArraySegment<byte> message, KcpChannel channel)
+        protected void ServerOnData(int connectionId, ReadOnlyMemory<byte> message, KcpChannel channel)
         {
-            byte[] copy = new byte[message.Count];
-            Buffer.BlockCopy(message.Array, message.Offset, copy, 0, message.Count);
-            serverReceived.Add(new Message(copy, channel));
+            serverReceived.Add(new Message(message.ToArray(), channel));
         }
 
         protected void SetupLogging()
@@ -191,13 +185,13 @@ namespace kcp2k.Tests
             UpdateSeveralTimes(5);
         }
 
-        void SendClientToServerBlocking(KcpClient client, ArraySegment<byte> message, KcpChannel channel)
+        void SendClientToServerBlocking(KcpClient client, ReadOnlySpan<byte> message, KcpChannel channel)
         {
             client.Send(message, channel);
             UpdateSeveralTimes(10);
         }
 
-        void SendServerToClientBlocking(int connectionId, ArraySegment<byte> message, KcpChannel channel)
+        void SendServerToClientBlocking(int connectionId, ReadOnlySpan<byte> message, KcpChannel channel)
         {
             server.Send(connectionId, message, channel);
             UpdateSeveralTimes(10);
@@ -255,12 +249,12 @@ namespace kcp2k.Tests
 
             byte[] message = {0x01, 0x02};
 
-            SendClientToServerBlocking(clientA, new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(clientA, new ReadOnlySpan<byte>(message), channel);
             Assert.That(serverReceived.Count, Is.EqualTo(1));
             Assert.That(serverReceived[0].data.SequenceEqual(message), Is.True);
             Assert.That(serverReceived[0].channel, Is.EqualTo(channel));
 
-            SendClientToServerBlocking(clientB, new ArraySegment<byte>(message), channel);
+            SendClientToServerBlocking(clientB, new ReadOnlySpan<byte>(message), channel);
             Assert.That(serverReceived.Count, Is.EqualTo(2));
             Assert.That(serverReceived[1].data.SequenceEqual(message), Is.True);
             Assert.That(serverReceived[1].channel, Is.EqualTo(channel));
@@ -276,12 +270,12 @@ namespace kcp2k.Tests
 
             byte[] message = {0x03, 0x04};
 
-            SendServerToClientBlocking(connectionIdA, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionIdA, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(clientReceivedA.Count, Is.EqualTo(1));
             Assert.That(clientReceivedA[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceivedA[0].channel, Is.EqualTo(KcpChannel.Reliable));
 
-            SendServerToClientBlocking(connectionIdB, new ArraySegment<byte>(message), KcpChannel.Reliable);
+            SendServerToClientBlocking(connectionIdB, new ReadOnlySpan<byte>(message), KcpChannel.Reliable);
             Assert.That(clientReceivedB.Count, Is.EqualTo(1));
             Assert.That(clientReceivedB[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceivedB[0].channel, Is.EqualTo(KcpChannel.Reliable));
@@ -297,12 +291,12 @@ namespace kcp2k.Tests
 
             byte[] message = {0x03, 0x04};
 
-            SendServerToClientBlocking(connectionIdA, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionIdA, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(clientReceivedA.Count, Is.EqualTo(1));
             Assert.That(clientReceivedA[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceivedA[0].channel, Is.EqualTo(KcpChannel.Unreliable));
 
-            SendServerToClientBlocking(connectionIdB, new ArraySegment<byte>(message), KcpChannel.Unreliable);
+            SendServerToClientBlocking(connectionIdB, new ReadOnlySpan<byte>(message), KcpChannel.Unreliable);
             Assert.That(clientReceivedB.Count, Is.EqualTo(1));
             Assert.That(clientReceivedB[0].data.SequenceEqual(message), Is.True);
             Assert.That(clientReceivedB[0].channel, Is.EqualTo(KcpChannel.Unreliable));

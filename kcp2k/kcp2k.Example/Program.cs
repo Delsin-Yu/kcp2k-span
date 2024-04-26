@@ -42,7 +42,7 @@ KcpConfig config = new KcpConfig(
 // create server
 KcpServer server = new KcpServer(
     (connectionId) => {},
-    (connectionId, message, channel) => Log.Info($"[KCP] OnServerDataReceived({connectionId}, {BitConverter.ToString(message.Array, message.Offset, message.Count)} @ {channel})"),
+    (connectionId, message, channel) => Log.Info($"[KCP] OnServerDataReceived({connectionId}, {BitConverter.ToString(message.ToArray())} @ {channel})"),
     (connectionId) => {},
     (connectionId, error, reason) => Log.Error($"[KCP] OnServerError({connectionId}, {error}, {reason}"),
     config
@@ -51,7 +51,7 @@ KcpServer server = new KcpServer(
 // create client
 KcpClient client = new KcpClient(
     () => {},
-    (message, channel) => Log.Info($"[KCP] OnClientDataReceived({BitConverter.ToString(message.Array, message.Offset, message.Count)} @ {channel})"),
+    (message, channel) => Log.Info($"[KCP] OnClientDataReceived({BitConverter.ToString(message.ToArray())} @ {channel})"),
     () => {},
     (error, reason) => Log.Warning($"[KCP] OnClientError({error}, {reason}"),
     config

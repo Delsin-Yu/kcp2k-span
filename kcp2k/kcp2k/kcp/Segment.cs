@@ -1,3 +1,4 @@
+using System;
 using System.IO;
 
 namespace kcp2k
@@ -36,7 +37,7 @@ namespace kcp2k
         // buffer is always Kcp.buffer. Kcp ctor creates the buffer of size:
         // (mtu + OVERHEAD) * 3 bytes.
         // in other words, Encode only ever writes up to the above amount of bytes.
-        internal int Encode(byte[] ptr, int offset)
+        internal int Encode(Span<byte> ptr, int offset)
         {
             int previousPosition = offset;
 

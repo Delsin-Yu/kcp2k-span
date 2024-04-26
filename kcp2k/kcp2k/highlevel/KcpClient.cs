@@ -35,7 +35,7 @@ namespace kcp2k
         // this ensures they are always initialized when used.
         // fixes https://github.com/MirrorNetworking/Mirror/issues/3337 and more
         protected readonly Action OnConnectedCallback;
-        protected readonly Action<ArraySegment<byte>, KcpChannel> OnDataCallback;
+        protected readonly Action<ReadOnlyMemory<byte>, KcpChannel> OnDataCallback;
         protected readonly Action OnDisconnectedCallback;
         protected readonly Action<ErrorCode, string> OnErrorCallback;
 
@@ -44,7 +44,7 @@ namespace kcp2k
         public bool connected;
 
         public KcpClient(Action OnConnected,
-                         Action<ArraySegment<byte>, KcpChannel> OnData,
+                         Action<ReadOnlyMemory<byte>, KcpChannel> OnData,
                          Action OnDisconnected,
                          Action<ErrorCode, string> OnError,
                          KcpConfig config)
@@ -70,7 +70,7 @@ namespace kcp2k
             OnConnectedCallback();
         }
 
-        protected override void OnData(ArraySegment<byte> message, KcpChannel channel) =>
+        protected override void OnData(ReadOnlyMemory<byte> message, KcpChannel channel) =>
             OnDataCallback(message, channel);
 
         protected override void OnError(ErrorCode error, string message) =>
@@ -138,7 +138,7 @@ namespace kcp2k
         // virtual so it may be modified for relays, etc.
         // call this while it returns true, to process all messages this tick.
         // returned ArraySegment is valid until next call to RawReceive.
-        protected virtual bool RawReceive(out ArraySegment<byte> segment)
+        protected virtual bool RawReceive(out ReadOnlyMemory<byte> segment)
         {
             segment = default;
             if (socket == null) return false;
@@ -164,7 +164,7 @@ namespace kcp2k
 
         // io - output.
         // virtual so it may be modified for relays, etc.
-        protected override void RawSend(ArraySegment<byte> data)
+        protected override void RawSend(ReadOnlyMemory<byte> data)
         {
             // only if socket was connected / created yet.
             // users may call send functions without having connected, causing NRE.
@@ -187,7 +187,7 @@ namespace kcp2k
             }
         }
 
-        public void Send(ArraySegment<byte> segment, KcpChannel channel)
+        public void Send(ReadOnlySpan<byte> segment, KcpChannel channel)
         {
             if (!connected)
             {
@@ -201,18 +201,19 @@ namespace kcp2k
         // insert raw IO. usually from socket.Receive.
         // offset is useful for relays, where we may parse a header and then
         // feed the rest to kcp.
-        public void RawInput(ArraySegment<byte> segment)
+        public void RawInput(ReadOnlyMemory<byte> segment)
         {
+            var segmentSpan = segment.Span;
             // ensure valid size: at least 1 byte for channel + 4 bytes for cookie
-            if (segment.Count <= 5) return;
+            if (segmentSpan.Length <= 5) return;
 
             // parse channel
             // byte channel = segment[0]; ArraySegment[i] isn't supported in some older Unity Mono versions
-            byte channel = segment.Array[segment.Offset + 0];
+            byte channel = segmentSpan[0];
 
             // server messages always contain the security cookie.
             // parse it, assign if not assigned, warn if suddenly different.
-            Utils.Decode32U(segment.Array, segment.Offset + 1, out uint messageCookie);
+            Utils.Decode32U(segmentSpan, 1, out uint messageCookie);
             if (messageCookie == 0)
             {
                 Log.Error($"[KCP] Client: received message with cookie=0, this should never happen. Server should always include the security cookie.");
@@ -230,7 +231,7 @@ namespace kcp2k
             }
 
             // parse message
-            ArraySegment<byte> message = new ArraySegment<byte>(segment.Array, segment.Offset + 1+4, segment.Count - 1-4);
+            ReadOnlyMemory<byte> message = segment.Slice(1 + 4, segment.Length - 1 - 4);
 
             switch (channel)
             {
@@ -264,7 +265,7 @@ namespace kcp2k
             // (connection is null if not active)
             if (active)
             {
-                while (RawReceive(out ArraySegment<byte> segment))
+                while (RawReceive(out ReadOnlyMemory<byte> segment))
                     RawInput(segment);
             }
 

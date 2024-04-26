@@ -274,10 +274,12 @@ namespace kcp2k
 
         // ikcp_send
         // splits message into MTU sized fragments, adds them to snd_queue.
-        public int Send(byte[] buffer, int offset, int len)
+        public int Send(ReadOnlySpan<byte> buffer)
         {
             // fragment count
             int count;
+            int len = buffer.Length;
+            int offset = 0;
 
             if (len < 0) return -1;
 
@@ -312,7 +314,7 @@ namespace kcp2k
 
                 if (len > 0)
                 {
-                    seg.data.Write(buffer, offset, size);
+                    seg.data.Write(buffer.Slice(offset, size));
                 }
                 // seg.len = size: WriteBytes sets segment.Position!
 
@@ -542,12 +544,14 @@ namespace kcp2k
         // used when you receive a low level packet (e.g. UDP packet)
         // => original kcp uses offset=0, we made it a parameter so that high
         //    level can skip the channel byte more easily
-        public int Input(byte[] data, int offset, int size)
+        public int Input(ReadOnlySpan<byte> data)
         {
             uint prev_una = snd_una;
             uint maxack = 0;
             uint latest_ts = 0;
             int flag = 0;
+            int offset = 0;
+            int size = data.Length;
 
             if (data == null || size < OVERHEAD) return -1;
 
@@ -635,7 +639,7 @@ namespace kcp2k
                             seg.una = una;
                             if (len > 0)
                             {
-                                seg.data.Write(data, offset, (int)len);
+                                seg.data.Write(data.Slice(offset, (int)len));
                             }
                             ParseData(seg);
                         }
