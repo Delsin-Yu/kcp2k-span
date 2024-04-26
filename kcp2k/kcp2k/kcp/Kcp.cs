@@ -2,6 +2,7 @@
 // Kept as close to original as possible.
 using System;
 using System.Collections.Generic;
+using System.Runtime.InteropServices;
 
 namespace kcp2k
 {
@@ -204,7 +205,7 @@ namespace kcp2k
 
             // move available data from rcv_buf -> rcv_queue
             int removed = 0;
-            foreach (Segment seg in rcv_buf)
+            foreach (ref readonly Segment seg in CollectionsMarshal.AsSpan(rcv_buf))
             {
                 if (seg.sn == rcv_nxt && rcv_queue.Count < rcv_wnd)
                 {
@@ -396,7 +397,7 @@ namespace kcp2k
         internal void ParseUna(uint una)
         {
             int removed = 0;
-            foreach (Segment seg in snd_buf)
+            foreach (ref readonly Segment seg in CollectionsMarshal.AsSpan(snd_buf))
             {
                 // if (Utils.TimeDiff(una, seg.sn) > 0)
                 if (seg.sn < una)
@@ -428,7 +429,7 @@ namespace kcp2k
             if (sn >= snd_nxt)
                 return;
 
-            foreach (Segment seg in snd_buf)
+            foreach (ref readonly Segment seg in CollectionsMarshal.AsSpan(snd_buf))
             {
                 // if (Utils.TimeDiff(sn, seg.sn) < 0)
                 if (sn < seg.sn)
@@ -518,7 +519,7 @@ namespace kcp2k
         void MoveReceiveBufferReadySegmentsToQueue()
         {
             int removed = 0;
-            foreach (Segment seg in rcv_buf)
+            foreach (ref readonly Segment seg in CollectionsMarshal.AsSpan(rcv_buf))
             {
                 // move segments while they are in 'rcv_nxt' sequence order.
                 // some may still be missing and inserted later, in this case it stops immediately
@@ -745,7 +746,7 @@ namespace kcp2k
             seg.una = rcv_nxt;
 
             // flush acknowledges
-            foreach (AckItem ack in acklist)
+            foreach (ref readonly AckItem ack in CollectionsMarshal.AsSpan(acklist))
             {
                 MakeSpace(ref size, OVERHEAD);
                 // ikcp_ack_get assigns ack[i] to seg.sn, seg.ts
@@ -844,7 +845,7 @@ namespace kcp2k
 
             // flush data segments
             int change = 0;
-            foreach (Segment segment in snd_buf)
+            foreach (ref readonly Segment segment in CollectionsMarshal.AsSpan(snd_buf))
             {
                 bool needsend = false;
 
@@ -1031,7 +1032,7 @@ namespace kcp2k
 
             int tm_flush = Utils.TimeDiff(ts_flush_, current_);
 
-            foreach (Segment seg in snd_buf)
+            foreach (ref readonly Segment seg in CollectionsMarshal.AsSpan(snd_buf))
             {
                 int diff = Utils.TimeDiff(seg.resendts, current_);
                 if (diff <= 0)
