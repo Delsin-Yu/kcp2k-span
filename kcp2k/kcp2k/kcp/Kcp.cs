@@ -244,10 +244,8 @@ namespace kcp2k
             int length = 0;
 
             // empty queue?
-            if (rcv_queue.Count == 0) return -1;
-
             // peek the first segment
-            Segment seq = rcv_queue.Peek();
+            if (!rcv_queue.TryPeek(out var seq)) return -1;
 
             // seg.frg is 0 if the message requires no fragmentation.
             // in that case, the segment's size is the final message size.
@@ -821,9 +819,7 @@ namespace kcp2k
             //   copy up to 'cwnd_' difference between them (sliding window)
             while (Utils.TimeDiff(snd_nxt, snd_una + cwnd_) < 0)
             {
-                if (snd_queue.Count == 0) break;
-
-                Segment newseg = snd_queue.Dequeue();
+                if (!snd_queue.TryDequeue(out var newseg)) break;
 
                 newseg.conv = conv;
                 newseg.cmd = CMD_PUSH;
